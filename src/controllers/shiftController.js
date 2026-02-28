@@ -8,15 +8,21 @@ const getAllShifts = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
-
 const createShift = async (req, res) => {
   try {
-    const creatorId = '8768f69d-aea9-4239-8212-82ed7fd39511'; // ID Ольги
+    // Временное решение для демо: используем первого пользователя из базы
+    // В реальном приложении: req.user.id из аутентификации
+    const creator = await prisma.user.findFirst({
+      where: { role: 'B2B' } // Ищем работодателя
+    }) || await prisma.user.findFirst(); // Или любого пользователя
     
-    const shift = await ShiftService.createShift(req.body, creatorId);
+    if (!creator) {
+      return res.status(400).json({ 
+        error: 'No users found. Please create a user first via POST /users/sync' 
+      });
+    }
     
-    await NotificationService.sendPushToHotUsers(shift);
-    
+    const shift = await ShiftService.createShift(req.body, creator.id);
     res.status(201).json(shift);
   } catch (e) {
     res.status(500).json({ error: e.message });
