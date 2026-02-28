@@ -4,25 +4,25 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")   // ← ЭТА СТРОКА ОБЯЗАТЕЛЬНА!
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String   @id @default(uuid())
-  uid          String   @unique
-  role         String   // "B2C" или "B2B"
-  email        String   @unique
-  name         String?
-  phone        String?
-  pushToken    String?
-  experience   String?
-  isHot        Boolean  @default(false)
-  aiScore      Int      @default(80)
-  address      String?
-  shiftsCreated Shift[]
-  applications Application[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  uid           String   @unique
+  email         String   @unique
+  role          String
+  name          String?
+  phone         String?
+  pushToken     String?
+  experience    String?
+  isHot         Boolean  @default(false)
+  aiScore       Int      @default(80)
+  address       String?
+  shiftsCreated Shift[]  @relation("Creator")
+  applications  Application[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Shift {
@@ -31,26 +31,23 @@ model Shift {
   establishment String
   address      String
   startTime    DateTime
-  endTime      DateTime?
   pay          Int
   description  String?
   status       String   @default("OPEN")
-  creatorId    String
   creator      User     @relation("Creator", fields: [creatorId], references: [id])
+  creatorId    String
   applications Application[]
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 }
 
 model Application {
   id        String   @id @default(uuid())
-  shiftId   String
-  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  seekerId  String
-  seeker    User     @relation(fields: [seekerId], references: [id])
   status    String   @default("PENDING")
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shiftId   String
+  seeker    User     @relation(fields: [seekerId], references: [id])
+  seekerId  String
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@unique([shiftId, seekerId])
 }
