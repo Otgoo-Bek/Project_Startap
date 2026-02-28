@@ -8,21 +8,21 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  uid           String   @unique
-  email         String   @unique
-  role          String
-  name          String?
-  phone         String?
-  pushToken     String?
-  experience    String?
-  isHot         Boolean  @default(false)
-  aiScore       Int      @default(80)
-  address       String?
-  shiftsCreated Shift[]  @relation("Creator", references: [id])  // ← ИСПРАВЛЕНО!
+  id           String   @id @default(uuid())
+  uid          String   @unique
+  email        String   @unique
+  role         String
+  name         String?
+  phone        String?
+  pushToken    String?
+  experience   String?
+  isHot        Boolean  @default(false)
+  aiScore      Int      @default(80)
+  address      String?
+  shiftsCreated Shift[]
   applications  Application[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Shift {
@@ -34,7 +34,7 @@ model Shift {
   pay          Int
   description  String?
   status       String   @default("OPEN")
-  creator      User     @relation("Creator", fields: [creatorId], references: [id])
+  creator      User     @relation(fields: [creatorId], references: [id])
   creatorId    String
   applications Application[]
   createdAt    DateTime @default(now())
