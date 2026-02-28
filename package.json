@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Backend for ASAP HORECA service",
   "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js",
     "postinstall": "npx prisma generate"
