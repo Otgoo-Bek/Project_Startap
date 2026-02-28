@@ -29,10 +29,18 @@ class UserService {
   }
 
   static async toggleHotStatus(userId, isHot) {
+    // Для демо используем первого пользователя
+    const users = await prisma.user.findMany();
+    if (users.length === 0) throw new Error('No users found');
+    
     return await prisma.user.update({
-      where: { id: userId },
+      where: { id: users[0].id },
       data: { isHot }
     });
+  }
+
+  static async getAllUsers() {
+    return await prisma.user.findMany();
   }
 }
 
