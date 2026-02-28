@@ -19,7 +19,7 @@ model User {
   isHot         Boolean  @default(false)
   aiScore       Int      @default(80)
   address       String?
-  shiftsCreated Shift[]  @relation("Creator")
+  shiftsCreated Shift[]  @relation("Creator", references: [id])  // ← ИСПРАВЛЕНО!
   applications  Application[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
