@@ -1,67 +1,50 @@
 import express from 'express';
 import cors from 'cors';
+import { PrismaClient } from '@prisma/client';
+
 import userRoutes from './routes/user.routes';
+import shiftRoutes from './routes/shift.routes';
+import applicationRoutes from './routes/application.routes';
 
 const app = express();
-
-// Логгирование запросов
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+const prisma = new PrismaClient();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK',
-    message: 'ASAP HORECA Backend is running',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
+// Логирование каждого запроса
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
 });
 
-// Welcome endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to ASAP HORECA API',
-    description: 'Emergency staff marketplace for restaurants and cafes',
-    version: '1.0.0',
-    endpoints: {
-      health: 'GET /health',
-      users: {
-        sync: 'POST /users/sync',
-        profile: 'GET /users/me',
-        update: 'PATCH /users/me',
-        push_token: 'PATCH /users/push-token',
-        seeker_status: 'PATCH /users/seeker/status (B2C only)'
-      }
-    }
-  });
+// Health check
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: 'OK',
+      message: 'Database connected!',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    res.status(500).json({ status: 'ERROR', message: 'DB connection failed' });
+  }
 });
 
-// API Routes
-app.use('/users', userRoutes);
+// Роуты
+app.use('/', userRoutes);
+app.use('/', shiftRoutes);
+app.use('/', applicationRoutes);
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
     error: 'Route not found',
-    path: req.url,
+    path: req.path,
     method: req.method,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Error handler
-app.use((error: any, req: any, res: any, next: any) => {
-  console.error('Server error:', error);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    timestamp: new Date().toISOString(),
   });
 });
 
