@@ -27,3 +27,10 @@ router.patch('/users/:id/profile', updateUserProfile);
 router.post('/users/:id/rate', rateWorker);
 
 export default router;
+ // Временно для просмотра БД (только для разработки!):
+router.get('/users', async (req, res) => {
+  const { PrismaClient } = require('@prisma/client');
+  const prisma = new PrismaClient();
+  const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
+  res.json(users);
+});
