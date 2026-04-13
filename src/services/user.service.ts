@@ -65,16 +65,33 @@ export const updateProfile = async (id: string, data: {
   });
 };
 
-// ── Поставить рейтинг (обновить aiScore) ─────────────
+// ── Поставить рейтинг (правильная формула среднего) ──
 export const rateUser = async (seekerId: string, stars: number) => {
   const user = await prisma.user.findUnique({ where: { id: seekerId } });
   if (!user) throw new Error('Пользователь не найден');
-  // Формула: 70% старый score + 30% новый рейтинг (звёзды * 20)
-  const newScore = Math.round((user.aiScore * 0.7) + (stars * 20 * 0.3));
+
+  const currentScore = user.aiScore ?? 80;
+  const currentCount = (user as any).ratingCount ?? 0;
+
+  // Формула среднего рейтинга:
+  // (старый score * кол-во оценок + новая оценка * 20) / (кол-во + 1)
+  const newCount = currentCount + 1;
+  const newScore = Math.round(
+    ((currentScore * currentCount) + (stars * 20)) / newCount
+  );
   const clamped = Math.min(100, Math.max(0, newScore));
+
+  console.log(
+    `[RATING] ${user.name}: ${currentScore}→${clamped} ` +
+    `(оценок: ${currentCount}→${newCount}, звёзд: ${stars})`
+  );
+
   return prisma.user.update({
     where: { id: seekerId },
-    data: { aiScore: clamped },
+    data: {
+      aiScore: clamped,
+      ratingCount: newCount,
+    } as any,
   });
 };
 
