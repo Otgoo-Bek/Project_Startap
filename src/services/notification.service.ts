@@ -1,25 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// Отправить push через Expo Push API (бесплатно, без Firebase)
+// Отправить push через Expo Push API
 const sendExpoPush = async (
   pushToken: string,
   title: string,
   body: string,
   data?: object
-) => {
+): Promise<void> => {
   if (!pushToken?.startsWith('ExponentPushToken')) {
-    console.log(`[PUSH] Пропуск — невалидный токен: ${pushToken?.slice(0, 20)}`);
+    console.log(`[PUSH] Пропуск — невалидный токен`);
     return;
   }
-
   try {
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
       },
       body: JSON.stringify({
         to: pushToken,
@@ -30,26 +28,20 @@ const sendExpoPush = async (
         priority: 'high',
       }),
     });
-    const result = await response.json();
-    console.log(`[PUSH] ✅ Отправлено: "${title}" → ${result?.data?.status}`);
+    // Явно типизируем ответ
+    const result = await response.json() as { data?: { status?: string } };
+    console.log(`[PUSH] ✅ "${title}" → ${result?.data?.status || 'sent'}`);
   } catch (e) {
     console.error('[PUSH] ❌ Ошибка:', e);
   }
 };
 
-// ── Сценарий А: Горящая смена ────────────────────────
-// При создании смены — пуш всем isHot=true соискателям
-export const sendPushToHotUsers = async (shift: any) => {
+// ── Сценарий А: при создании смены → пуш всем isHot ─
+export const sendPushToHotUsers = async (shift: any): Promise<void> => {
   const hotUsers = await prisma.user.findMany({
-    where: {
-      role: 'B2C',
-      isHot: true,
-      pushToken: { not: null }
-    }
+    where: { role: 'B2C', isHot: true, pushToken: { not: null } }
   });
-
   console.log(`[PUSH] Горящая смена → ${hotUsers.length} кандидатов`);
-
   const promises = hotUsers
     .filter(u => u.pushToken)
     .map(u => sendExpoPush(
@@ -58,13 +50,14 @@ export const sendPushToHotUsers = async (shift: any) => {
       `${shift.pay}₽ · ${shift.address}`,
       { shiftId: shift.id, type: 'new_shift' }
     ));
-
   await Promise.allSettled(promises);
 };
 
-// ── Сценарий Б: Новый отклик ─────────────────────────
-// При отклике — пуш работодателю
-export const sendPushToEmployer = async (creatorId: string, message: string) => {
+// ── Сценарий Б: при отклике → пуш работодателю ───────
+export const sendPushToEmployer = async (
+  creatorId: string,
+  message: string
+): Promise<void> => {
   const employer = await prisma.user.findUnique({ where: { id: creatorId } });
   if (!employer?.pushToken) {
     console.log(`[PUSH] Работодатель ${creatorId} — нет токена`);
@@ -78,8 +71,11 @@ export const sendPushToEmployer = async (creatorId: string, message: string) => 
   );
 };
 
-// ── Пуш соискателю (принят / смена завершена) ────────
-export const sendPushToSeeker = async (seekerId: string, message: string) => {
+// ── Пуш соискателю ────────────────────────────────────
+export const sendPushToSeeker = async (
+  seekerId: string,
+  message: string
+): Promise<void> => {
   const seeker = await prisma.user.findUnique({ where: { id: seekerId } });
   if (!seeker?.pushToken) {
     console.log(`[PUSH] Соискатель ${seekerId} — нет токена`);
