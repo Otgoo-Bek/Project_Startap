@@ -19,7 +19,7 @@ export const apply = async (req: Request, res: Response) => {
       data: { shiftId, seekerId }
     });
 
-    // Push работодателю: "Новый кандидат"
+    // Сценарий Б: Push работодателю — "Новый кандидат"
     const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
     const seeker = await prisma.user.findUnique({ where: { id: seekerId } });
     if (shift && seeker) {
@@ -36,7 +36,7 @@ export const apply = async (req: Request, res: Response) => {
   }
 };
 
-// GET /shifts/:id/applicants — кандидаты отсортированные по aiScore
+// GET /shifts/:id/applicants — кандидаты
 export const getApplicants = async (req: Request, res: Response) => {
   try {
     const applicants = await prisma.application.findMany({
@@ -50,7 +50,7 @@ export const getApplicants = async (req: Request, res: Response) => {
   }
 };
 
-// POST /applications/:id/accept — принять кандидата
+// POST /applications/:id/accept — принять
 export const accept = async (req: Request, res: Response) => {
   try {
     const application = await prisma.application.update({
@@ -72,7 +72,6 @@ export const accept = async (req: Request, res: Response) => {
 };
 
 // POST /applications/:id/complete — завершить смену
-// Меняет статус смены на COMPLETED, прячет от соискателя
 export const complete = async (req: Request, res: Response) => {
   try {
     const application = await prisma.application.update({
@@ -99,7 +98,7 @@ export const complete = async (req: Request, res: Response) => {
   }
 };
 
-// POST /applications/:id/rate — оценить соискателя с комментарием
+// POST /applications/:id/rate — оценить с комментарием
 export const rateApplication = async (req: Request, res: Response) => {
   try {
     const { stars, comment } = req.body;
@@ -107,26 +106,33 @@ export const rateApplication = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'stars должен быть от 1 до 5' });
     }
 
-    // Сохранить оценку и комментарий в Application
-    const application = await prisma.application.update({
+    // Сначала получаем application с seeker
+    const existing = await prisma.application.findUnique({
       where: { id: req.params.id },
-      data: { rating: stars, comment: comment || null },
       include: { seeker: true }
+    }) as any;
+
+    if (!existing) return res.status(404).json({ error: 'Не найдено' });
+
+    // Сохранить оценку и комментарий (as any — до миграции)
+    await (prisma.application.update as any)({
+      where: { id: req.params.id },
+      data: { rating: stars, comment: comment || null }
     });
 
     // Пересчитать aiScore соискателя
-    const seeker = application.seeker;
-    const currentScore = seeker.aiScore ?? 0;
-    const currentCount = (seeker as any).ratingCount ?? 0;
+    const seeker = existing.seeker;
+    const currentScore: number = seeker.aiScore ?? 0;
+    const currentCount: number = (seeker as any).ratingCount ?? 0;
     const newCount = currentCount + 1;
     const newScore = Math.round(
       ((currentScore * currentCount) + (stars * 20)) / newCount
     );
     const clamped = Math.min(100, Math.max(0, newScore));
 
-    await prisma.user.update({
+    await (prisma.user.update as any)({
       where: { id: seeker.id },
-      data: { aiScore: clamped, ratingCount: newCount } as any
+      data: { aiScore: clamped, ratingCount: newCount }
     });
 
     console.log(`[RATING] ${seeker.name}: ${currentScore}→${clamped} (${stars}⭐)`);
