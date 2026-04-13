@@ -8,41 +8,44 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  uid          String   @unique
-  email        String   @unique
-  role         String
-  name         String?
-  phone        String?
-  pushToken    String?
-  experience   String?
-  isHot        Boolean  @default(false)
-  aiScore      Int      @default(80)
-  address      String?
+  id            String   @id @default(uuid())
+  uid           String   @unique
+  email         String   @unique
+  role          String
+  name          String?
+  phone         String?
+  pushToken     String?
+  experience    String?
+  isHot         Boolean  @default(false)
+  aiScore       Int      @default(0)   // Начинается с 0!
+  ratingCount   Int      @default(0)   // Счётчик оценок
+  address       String?
   shiftsCreated Shift[]
   applications  Application[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Shift {
-  id           String   @id @default(uuid())
-  role         String
+  id            String   @id @default(uuid())
+  role          String
   establishment String
-  address      String
-  startTime    DateTime
-  pay          Int
-  description  String?
-  status       String   @default("OPEN")
-  creator      User     @relation(fields: [creatorId], references: [id])
-  creatorId    String
-  applications Application[]
-  createdAt    DateTime @default(now())
+  address       String
+  startTime     DateTime
+  pay           Int
+  description   String?
+  status        String   @default("OPEN") // OPEN | CLOSED | COMPLETED | CANCELLED
+  creator       User     @relation(fields: [creatorId], references: [id])
+  creatorId     String
+  applications  Application[]
+  createdAt     DateTime @default(now())
 }
 
 model Application {
   id        String   @id @default(uuid())
-  status    String   @default("PENDING")
+  status    String   @default("PENDING") // PENDING | APPROVED | COMPLETED | REJECTED
+  comment   String?  // Комментарий работодателя при оценке
+  rating    Int?     // Оценка звёздами (1-5)
   shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   shiftId   String
   seeker    User     @relation(fields: [seekerId], references: [id])
