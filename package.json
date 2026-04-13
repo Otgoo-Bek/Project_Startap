@@ -7,11 +7,9 @@
     "node": ">=18.x"
   },
   "scripts": {
-    "build": "tsc --skipLibCheck",
-    "start": "node dist/server.js",
-    "dev": "ts-node --transpile-only src/server.ts",
-    "dev:watch": "nodemon --exec 'ts-node --transpile-only src/server.ts'"
-  },
+ "start": "npx prisma generate && npx ts-node --transpile-only src/server.ts",
+  "dev": "npx ts-node --transpile-only src/server.ts"
+ },
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "cors": "^2.8.5",
