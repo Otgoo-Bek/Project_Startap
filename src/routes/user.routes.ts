@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { PrismaClient } from '@prisma/client';
 import {
   sync,
   toggleHot,
@@ -10,6 +11,7 @@ import {
 } from '../controllers/user.controller';
 
 const router = Router();
+const prisma = new PrismaClient();
 
 // ── Основные ─────────────────────────────────────────
 router.post('/users/sync', sync);
@@ -17,20 +19,30 @@ router.patch('/seeker/status', toggleHot);
 router.get('/users/me', getMe);
 router.patch('/users/me', patchMe);
 
-// ── Профиль по ID (для работодателя) ─────────────────
+// ── Сохранить push-токен устройства ──────────────────
+router.patch('/users/:id/push-token', async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken) {
+      return res.status(400).json({ error: 'pushToken обязателен' });
+    }
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { pushToken }
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Профиль по ID ─────────────────────────────────────
 router.get('/users/:id', getUserProfile);
 
-// ── Обновление профиля по ID ─────────────────────────
+// ── Обновить профиль по ID ───────────────────────────
 router.patch('/users/:id/profile', updateUserProfile);
 
-// ── Рейтинг ──────────────────────────────────────────
+// ── Поставить рейтинг ─────────────────────────────────
 router.post('/users/:id/rate', rateWorker);
 
 export default router;
- // Временно для просмотра БД (только для разработки!):
-router.get('/users', async (req, res) => {
-  const { PrismaClient } = require('@prisma/client');
-  const prisma = new PrismaClient();
-  const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });
-  res.json(users);
-});

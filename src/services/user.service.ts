@@ -73,8 +73,7 @@ export const rateUser = async (seekerId: string, stars: number) => {
   const currentScore = user.aiScore ?? 80;
   const currentCount = (user as any).ratingCount ?? 0;
 
-  // Формула среднего рейтинга:
-  // (старый score * кол-во оценок + новая оценка * 20) / (кол-во + 1)
+  // (старый score * кол-во + новая оценка * 20) / (кол-во + 1)
   const newCount = currentCount + 1;
   const newScore = Math.round(
     ((currentScore * currentCount) + (stars * 20)) / newCount
