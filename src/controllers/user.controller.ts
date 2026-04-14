@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 import {
   syncUser,
   toggleHotStatus,
@@ -10,6 +11,12 @@ import {
 } from '../services/user.service';
 
 const prisma = new PrismaClient();
+
+// Прямое подключение к PostgreSQL (обходит Prisma типы)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 // POST /users/sync
 export const sync = async (req: Request, res: Response) => {
@@ -58,20 +65,23 @@ export const patchMe = async (req: Request, res: Response) => {
   }
 };
 
-// GET /users/:id — профиль + статистика
+// GET /users/:id — профиль + статистика через pg
 export const getUserProfile = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const rows = await prisma.$queryRawUnsafe(
-      `SELECT * FROM "User" WHERE id = $1`, id
-    ) as any[];
-    if (!rows || rows.length === 0) {
+    const { rows } = await client.query(
+      `SELECT * FROM "User" WHERE id = $1 LIMIT 1`, [id]
+    );
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'Не найден' });
     }
     const stats = await getWorkerStats(id);
     res.json({ ...rows[0], ...stats });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -85,8 +95,9 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-// POST /users/:id/rate — поставить рейтинг через $queryRawUnsafe
+// POST /users/:id/rate — рейтинг через pg напрямую
 export const rateWorker = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const stars = Number(req.body.stars);
@@ -95,33 +106,38 @@ export const rateWorker = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'stars должен быть от 1 до 5' });
     }
 
-    // Получить текущие значения
-    const rows = await prisma.$queryRawUnsafe(
-      `SELECT "aiScore", "ratingCount", "name" FROM "User" WHERE id = $1`, id
-    ) as any[];
+    // Получить текущие значения напрямую из БД
+    const selectResult = await client.query(
+      `SELECT "aiScore", "ratingCount", "name" FROM "User" WHERE id = $1`,
+      [id]
+    );
 
-    if (!rows || rows.length === 0) {
+    if (selectResult.rows.length === 0) {
       return res.status(404).json({ error: 'Пользователь не найден' });
     }
 
-    const user = rows[0];
+    const user = selectResult.rows[0];
     const currentScore = Number(user.aiScore) || 0;
     const currentCount = Number(user.ratingCount) || 0;
     const newCount = currentCount + 1;
+
+    // Формула среднего рейтинга
     const newScore = Math.min(100, Math.max(0,
       Math.round(((currentScore * currentCount) + (stars * 20)) / newCount)
     ));
 
-    // Обновить через $executeRawUnsafe
-    await prisma.$executeRawUnsafe(
+    // Обновить напрямую через pg
+    await client.query(
       `UPDATE "User" SET "aiScore" = $1, "ratingCount" = $2 WHERE id = $3`,
-      newScore, newCount, id
+      [newScore, newCount, id]
     );
 
-    console.log(`[RATING] ${user.name}: ${currentScore}→${newScore} (${stars}⭐)`);
+    console.log(`[RATING] ${user.name}: ${currentScore}→${newScore} (${stars}⭐, всего: ${newCount})`);
 
     res.json({ success: true, newScore, ratingCount: newCount });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 };
