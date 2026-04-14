@@ -95,7 +95,7 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-// POST /users/:id/rate — рейтинг через pg напрямую
+// POST /users/:id/rate — дробный рейтинг
 export const rateWorker = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
@@ -103,41 +103,36 @@ export const rateWorker = async (req: Request, res: Response) => {
     const stars = Number(req.body.stars);
 
     if (!stars || stars < 1 || stars > 5) {
-      return res.status(400).json({ error: 'stars должен быть от 1 до 5' });
+      return res.status(400).json({ error: 'stars от 1 до 5' });
     }
 
-    // Получить текущие значения напрямую из БД
-    const selectResult = await client.query(
+    const { rows } = await client.query(
       `SELECT "aiScore", "ratingCount", "name" FROM "User" WHERE id = $1`,
       [id]
     );
+    if (rows.length === 0) return res.status(404).json({ error: 'Не найден' });
 
-    if (selectResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-
-    const user = selectResult.rows[0];
-    const currentScore = Number(user.aiScore) || 0;
+    const user = rows[0];
     const currentCount = Number(user.ratingCount) || 0;
+    const currentScore = Number(user.aiScore) || 0;
     const newCount = currentCount + 1;
 
-    // Формула среднего рейтинга
+    // Дробная формула: среднее арифметическое звёзд * 20
+    // Например: было 4.0 (2 оценки), новая 5.0 → (4.0*2 + 5.0)/3 = 4.33 → 86.7
+    const prevAvgStars = currentScore / 20; // обратно в звёзды
+    const newAvgStars = ((prevAvgStars * currentCount) + stars) / newCount;
     const newScore = Math.min(100, Math.max(0,
-      Math.round(((currentScore * currentCount) + (stars * 20)) / newCount)
+      Math.round(newAvgStars * 20 * 10) / 10 // округление до 1 знака
     ));
 
-    // Обновить напрямую через pg
     await client.query(
       `UPDATE "User" SET "aiScore" = $1, "ratingCount" = $2 WHERE id = $3`,
       [newScore, newCount, id]
     );
 
     console.log(`[RATING] ${user.name}: ${currentScore}→${newScore} (${stars}⭐, всего: ${newCount})`);
-
     res.json({ success: true, newScore, ratingCount: newCount });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
-  } finally {
-    client.release();
-  }
+  } finally { client.release(); }
 };
