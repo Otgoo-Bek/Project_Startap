@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import {
   syncUser,
   toggleHotStatus,
@@ -10,12 +10,6 @@ import {
 } from '../services/user.service';
 
 const prisma = new PrismaClient();
-
-// ── Хелпер: raw SQL запрос с типом ───────────────────
-async function queryRaw(sql: Prisma.Sql){
-  const result = await prisma.$queryRaw(sql);
-  return result as any[];
-}
 
 // POST /users/sync
 export const sync = async (req: Request, res: Response) => {
@@ -68,10 +62,10 @@ export const patchMe = async (req: Request, res: Response) => {
 export const getUserProfile = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const rows = await queryRaw(
-      Prisma.sql`SELECT * FROM "User" WHERE id = ${id}::uuid LIMIT 1`
-    );
-    if (rows.length === 0) {
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM "User" WHERE id = $1`, id
+    ) as any[];
+    if (!rows || rows.length === 0) {
       return res.status(404).json({ error: 'Не найден' });
     }
     const stats = await getWorkerStats(id);
@@ -91,7 +85,7 @@ export const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-// POST /users/:id/rate — поставить рейтинг через RAW SQL
+// POST /users/:id/rate — поставить рейтинг через $queryRawUnsafe
 export const rateWorker = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -102,14 +96,11 @@ export const rateWorker = async (req: Request, res: Response) => {
     }
 
     // Получить текущие значения
-    const rows = await queryRaw(
-      Prisma.sql`
-        SELECT "aiScore", "ratingCount", "name"
-        FROM "User" WHERE id = ${id}::uuid LIMIT 1
-      `
-    );
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT "aiScore", "ratingCount", "name" FROM "User" WHERE id = $1`, id
+    ) as any[];
 
-    if (rows.length === 0) {
+    if (!rows || rows.length === 0) {
       return res.status(404).json({ error: 'Пользователь не найден' });
     }
 
@@ -121,13 +112,10 @@ export const rateWorker = async (req: Request, res: Response) => {
       Math.round(((currentScore * currentCount) + (stars * 20)) / newCount)
     ));
 
-    // Обновить через raw SQL
-    await prisma.$executeRaw(
-      Prisma.sql`
-        UPDATE "User"
-        SET "aiScore" = ${newScore}, "ratingCount" = ${newCount}
-        WHERE id = ${id}::uuid
-      `
+    // Обновить через $executeRawUnsafe
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "aiScore" = $1, "ratingCount" = $2 WHERE id = $3`,
+      newScore, newCount, id
     );
 
     console.log(`[RATING] ${user.name}: ${currentScore}→${newScore} (${stars}⭐)`);
