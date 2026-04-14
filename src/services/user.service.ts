@@ -2,20 +2,40 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// ── Создать или найти пользователя ───────────────────
+// Создать или найти пользователя
+// isLogin=true — только вход (не создавать нового)
 export const syncUser = async (data: {
   uid: string;
   email: string;
   role: string;
   name?: string;
+  isLogin?: boolean;
 }) => {
   const existing = await prisma.user.findUnique({
     where: { email: data.email }
   });
-  if (existing) return existing;
-  return prisma.user.create({ data });
-};
 
+  // Режим входа: пользователь должен существовать
+  if (data.isLogin) {
+    if (!existing) {
+      return { error: 'Аккаунт не найден. Сначала зарегистрируйся.' };
+    }
+    return existing;
+  }
+
+  // Режим регистрации: вернуть существующего или создать нового
+  if (existing) return existing;
+
+  return prisma.user.create({
+    data: {
+      uid: data.uid,
+      email: data.email,
+      role: data.role,
+      name: data.name || '',
+      aiScore: 0, // новый пользователь начинает с 0
+    }
+  });
+};
 // ── Переключить isHot ────────────────────────────────
 export const toggleHotStatus = async (uid: string, isHot: boolean) => {
   return prisma.user.updateMany({

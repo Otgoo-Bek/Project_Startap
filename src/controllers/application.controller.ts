@@ -1,6 +1,11 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 import {
   sendPushToEmployer,
   sendPushToSeeker,
@@ -8,11 +13,6 @@ import {
 } from '../services/notification.service';
 
 const prisma = new PrismaClient();
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
 
 // POST /shifts/:id/apply — откликнуться
 export const apply = async (req: Request, res: Response) => {
@@ -25,7 +25,7 @@ export const apply = async (req: Request, res: Response) => {
       data: { shiftId, seekerId }
     });
 
-    // Сценарий Б: Push работодателю
+    // Сценарий Б: Push работодателю — "Новый кандидат"
     const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
     const seeker = await prisma.user.findUnique({ where: { id: seekerId } });
     if (shift && seeker) {
@@ -42,7 +42,7 @@ export const apply = async (req: Request, res: Response) => {
   }
 };
 
-// GET /shifts/:id/applicants — список кандидатов
+// GET /shifts/:id/applicants — кандидаты
 export const getApplicants = async (req: Request, res: Response) => {
   try {
     const applicants = await prisma.application.findMany({
@@ -56,7 +56,7 @@ export const getApplicants = async (req: Request, res: Response) => {
   }
 };
 
-// POST /applications/:id/accept — принять кандидата
+// POST /applications/:id/accept — принять
 export const accept = async (req: Request, res: Response) => {
   try {
     const application = await prisma.application.update({
@@ -86,7 +86,7 @@ export const complete = async (req: Request, res: Response) => {
       include: { shift: true, seeker: true }
     });
 
-    // Закрыть смену
+    // Закрыть саму смену
     await prisma.shift.update({
       where: { id: application.shiftId },
       data: { status: 'COMPLETED' }
@@ -104,7 +104,7 @@ export const complete = async (req: Request, res: Response) => {
   }
 };
 
-// POST /applications/:id/rate — оценить с комментарием через pg
+// POST /applications/:id/rate — дробный рейтинг + комментарий
 export const rateApplication = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
@@ -115,7 +115,6 @@ export const rateApplication = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'stars от 1 до 5' });
     }
 
-    // Получить application + данные соискателя
     const { rows: appRows } = await client.query(
       `SELECT a."seekerId", u."aiScore", u."ratingCount", u."name"
        FROM "Application" a
@@ -123,39 +122,34 @@ export const rateApplication = async (req: Request, res: Response) => {
        WHERE a.id = $1 LIMIT 1`,
       [applicationId]
     );
-
-    if (appRows.length === 0) {
-      return res.status(404).json({ error: 'Не найдено' });
-    }
+    if (appRows.length === 0) return res.status(404).json({ error: 'Не найдено' });
 
     const app = appRows[0];
 
-    // Сохранить rating и comment в Application
+    // Сохранить оценку в Application
     await client.query(
       `UPDATE "Application" SET "rating" = $1, "comment" = $2 WHERE id = $3`,
       [Number(stars), comment || null, applicationId]
     );
 
-    // Пересчитать aiScore соискателя
+    // Дробная формула рейтинга
     const currentScore = Number(app.aiScore) || 0;
     const currentCount = Number(app.ratingCount) || 0;
     const newCount = currentCount + 1;
+    const prevAvgStars = currentScore / 20;
+    const newAvgStars = ((prevAvgStars * currentCount) + Number(stars)) / newCount;
     const newScore = Math.min(100, Math.max(0,
-      Math.round(((currentScore * currentCount) + (Number(stars) * 20)) / newCount)
+      Math.round(newAvgStars * 20 * 10) / 10
     ));
 
-    // Обновить aiScore и ratingCount в User
     await client.query(
       `UPDATE "User" SET "aiScore" = $1, "ratingCount" = $2 WHERE id = $3`,
       [newScore, newCount, app.seekerId]
     );
 
     console.log(`[RATING] ${app.name}: ${currentScore}→${newScore} (${stars}⭐) "${comment || ''}"`);
-
     res.json({ success: true, newScore, ratingCount: newCount, comment });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
-  } finally {
-    client.release();
-  }
+  } finally { client.release(); }
 };
