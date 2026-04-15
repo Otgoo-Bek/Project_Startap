@@ -5,9 +5,12 @@ import { PrismaClient } from '@prisma/client';
 import userRoutes from './routes/user.routes';
 import shiftRoutes from './routes/shift.routes';
 import applicationRoutes from './routes/application.routes';
+import balanceRoutes from './routes/balance.routes';
 
 const app = express();
 const prisma = new PrismaClient();
+
+app.use('/', balanceRoutes);
 
 // Middleware
 app.use(cors());

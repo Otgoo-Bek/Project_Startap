@@ -11,6 +11,7 @@ import {
   sendPushToSeeker,
   sendPushToHotUsers,
 } from '../services/notification.service';
+import { Z_BLOCK } from 'node:zlib';
 
 const prisma = new PrismaClient();
 
@@ -78,32 +79,59 @@ export const accept = async (req: Request, res: Response) => {
 };
 
 // POST /applications/:id/complete — завершить смену
+// POST /applications/:id/complete — завершить + перевести деньги
 export const complete = async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
-    const application = await prisma.application.update({
-      where: { id: req.params.id },
-      data: { status: 'COMPLETED' },
-      include: { shift: true, seeker: true }
-    });
+    // Получить данные смены и соискателя
+    const { rows } = await client.query(
+      `SELECT a.*, s.pay, s.role AS "shiftRole", s.establishment
+       FROM "Application" a
+       JOIN "Shift" s ON s.id = a."shiftId"
+       WHERE a.id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
 
-    // Закрыть саму смену
-    await prisma.shift.update({
-      where: { id: application.shiftId },
-      data: { status: 'COMPLETED' }
-    });
+    const app = rows[0];
+    const pay = Number(app.pay);
 
-    // Push соискателю: "Смена завершена"
-    await sendPushToSeeker(
-      application.seekerId,
-      `🏁 Смена "${application.shift.role}" завершена. Работодатель скоро оценит вас!`
+    // Перевести деньги соискателю
+    await client.query(
+      `UPDATE "User" SET earnings = earnings + $1 WHERE id = $2`,
+      [pay, app.seekerId]
     );
 
-    res.json({ success: true, application });
+    // Обновить статус смены и отклика
+    await client.query(
+      `UPDATE "Application" SET status = 'COMPLETED' WHERE id = $1`,
+      [req.params.id]
+    );
+    await client.query(
+      `UPDATE "Shift" SET status = 'COMPLETED' WHERE id = $1`,
+      [app.shiftId]
+    );
+
+    // Записать транзакцию
+    await client.query(
+      `INSERT INTO "Transaction"
+       (type, amount, "toUserId", "shiftId", description)
+       VALUES ('PAYMENT', $1, $2, $3, $4)`,
+      [pay, app.seekerId, app.shiftId,
+       `Оплата смены: ${app.shiftRole} в ${app.establishment}`]
+    );
+
+    // Push соискателю
+    await sendPushToSeeker(
+      app.seekerId,
+      `💰 Смена завершена! ${pay}₽ начислено на ваш счёт`
+    );
+
+    res.json({ success: true, earned: pay });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
-  }
+  } finally { client.release(); }
 };
-
 // POST /applications/:id/rate — дробный рейтинг + комментарий
 export const rateApplication = async (req: Request, res: Response) => {
   const client = await pool.connect();
