@@ -15,16 +15,30 @@ export const syncUser = async (data: {
     where: { email: data.email }
   });
 
-  // Режим входа: пользователь должен существовать
+  // ВХОД
   if (data.isLogin) {
     if (!existing) {
       return { error: 'Аккаунт не найден. Сначала зарегистрируйся.' };
     }
+    // Проверяем что роль совпадает!
+    if (existing.role !== data.role) {
+      if (existing.role === 'B2B') {
+        return { error: 'Этот аккаунт зарегистрирован как работодатель. Войди через "Найти персонал".' };
+      } else {
+        return { error: 'Этот аккаунт зарегистрирован как соискатель. Войди через "Я ищу работу".' };
+      }
+    }
     return existing;
   }
 
-  // Режим регистрации: вернуть существующего или создать нового
-  if (existing) return existing;
+  // РЕГИСТРАЦИЯ
+  if (existing) {
+    // Email уже занят другой ролью
+    if (existing.role !== data.role) {
+      return { error: 'Этот email уже используется для другой роли.' };
+    }
+    return existing;
+  }
 
   return prisma.user.create({
     data: {
@@ -32,7 +46,7 @@ export const syncUser = async (data: {
       email: data.email,
       role: data.role,
       name: data.name || '',
-      aiScore: 0, // новый пользователь начинает с 0
+      aiScore: 0,
     }
   });
 };
