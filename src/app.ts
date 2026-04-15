@@ -13,7 +13,11 @@ const prisma = new PrismaClient();
 app.use('/', balanceRoutes);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-uid'],
+}));
 app.use(express.json());
 
 // Логирование каждого запроса
