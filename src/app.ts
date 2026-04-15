@@ -10,17 +10,20 @@ import balanceRoutes from './routes/balance.routes';
 const app = express();
 const prisma = new PrismaClient();
 
-app.use('/', balanceRoutes);
-
-// Middleware
+// ── CORS должен быть ПЕРВЫМ ──────────────────────────
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-uid'],
 }));
+
+// Preflight для всех роутов
+app.options('*', cors());
+
+// JSON парсер
 app.use(express.json());
 
-// Логирование каждого запроса
+// Логирование
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
@@ -40,10 +43,11 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Роуты
+// ── Роуты (ПОСЛЕ cors и express.json) ───────────────
 app.use('/', userRoutes);
 app.use('/', shiftRoutes);
 app.use('/', applicationRoutes);
+app.use('/', balanceRoutes);
 
 // 404 handler
 app.use((req, res) => {
