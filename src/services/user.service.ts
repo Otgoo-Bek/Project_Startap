@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-
+import { Pool } from 'pg';
 const prisma = new PrismaClient();
 
 // Создать или найти пользователя
@@ -87,18 +87,58 @@ export const updateUser = async (uid: string, data: {
 };
 
 // ── Обновить профиль по ID ───────────────────────────
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// ── Обновить профиль по ID ───────────────────────────
 export const updateProfile = async (id: string, data: {
   name?: string;
   experience?: string;
   phone?: string;
   address?: string;
+  companyName?: string;
+  responsibleName?: string;
+  location?: string;
+  yearsOnMarket?: number;
 }) => {
-  return prisma.user.update({
-    where: { id },
-    data,
-  });
-};
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE "User" SET
+        name = COALESCE($1, name),
+        experience = COALESCE($2, experience),
+        phone = COALESCE($3, phone),
+        address = COALESCE($4, address),
+        "companyName" = COALESCE($5, "companyName"),
+        "responsibleName" = COALESCE($6, "responsibleName"),
+        location = COALESCE($7, location),
+        "yearsOnMarket" = COALESCE($8, "yearsOnMarket"),
+        "updatedAt" = NOW()
+      WHERE id = $9`,
+      [
+        data.name || null,
+        data.experience || null,
+        data.phone || null,
+        data.address || null,
+        data.companyName || null,
+        data.responsibleName || null,
+        data.location || null,
+        data.yearsOnMarket || null,
+        id
+      ]
+    );
 
+    // Вернуть обновлённый профиль
+    const { rows } = await client.query(
+      `SELECT * FROM "User" WHERE id = $1`, [id]
+    );
+    return rows[0];
+  } finally {
+    client.release();
+  }
+};
 // ── Поставить рейтинг (правильная формула среднего) ──
 export const rateUser = async (seekerId: string, stars: number) => {
   const user = await prisma.user.findUnique({ where: { id: seekerId } });
