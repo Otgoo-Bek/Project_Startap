@@ -181,3 +181,61 @@ export const rateApplication = async (req: Request, res: Response) => {
     res.status(500).json({ error: e.message });
   } finally { client.release(); }
 };
+// POST /applications/:id/confirm-employer — работодатель подтверждает
+export const confirmByEmployer = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      `UPDATE "Application" 
+       SET "confirmedByEmployer" = true 
+       WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+    
+    // Если оба подтвердили — завершить смену автоматически
+    const app = rows[0];
+    if (app.confirmedByEmployer && app.confirmedBySeeker) {
+      await client.query(
+        `UPDATE "Application" SET status = 'COMPLETED' WHERE id = $1`,
+        [req.params.id]
+      );
+      await client.query(
+        `UPDATE "Shift" SET status = 'COMPLETED' WHERE id = $1`,
+        [app.shiftId]
+      );
+    }
+    res.json({ success: true, application: rows[0] });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+};
+
+// POST /applications/:id/confirm-seeker — соискатель подтверждает
+export const confirmBySeeker = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      `UPDATE "Application"
+       SET "confirmedBySeeker" = true
+       WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Не найдено' });
+
+    const app = rows[0];
+    if (app.confirmedByEmployer && app.confirmedBySeeker) {
+      await client.query(
+        `UPDATE "Application" SET status = 'COMPLETED' WHERE id = $1`,
+        [req.params.id]
+      );
+      await client.query(
+        `UPDATE "Shift" SET status = 'COMPLETED' WHERE id = $1`,
+        [app.shiftId]
+      );
+    }
+    res.json({ success: true, application: rows[0] });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+};
