@@ -11,12 +11,26 @@ export const createReview = async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const { fromUserId, toUserId, text, stars } = req.body;
-    if (!fromUserId || !toUserId || !text || !stars) {
-      return res.status(400).json({ error: 'Все поля обязательны' });
+    
+    // Проверить что они работали вместе
+    const { rows: check } = await client.query(
+      `SELECT a.id FROM "Application" a
+       JOIN "Shift" s ON s.id = a."shiftId"
+       WHERE a.status = 'COMPLETED'
+       AND (
+         (a."seekerId" = $1 AND s."creatorId" = $2)
+         OR
+         (a."seekerId" = $2 AND s."creatorId" = $1)
+       ) LIMIT 1`,
+      [fromUserId, toUserId]
+    );
+    
+    if (!check.length) {
+      return res.status(403).json({ 
+        error: 'Можно оставить отзыв только после совместной работы' 
+      });
     }
-    if (stars < 1 || stars > 5) {
-      return res.status(400).json({ error: 'stars от 1 до 5' });
-    }
+
     const { rows } = await client.query(
       `INSERT INTO "Review" ("fromUserId", "toUserId", text, stars)
        VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -27,7 +41,6 @@ export const createReview = async (req: Request, res: Response) => {
     res.status(500).json({ error: e.message });
   } finally { client.release(); }
 };
-
 // GET /reviews/:userId — получить отзывы пользователя
 export const getReviews = async (req: Request, res: Response) => {
   const client = await pool.connect();
