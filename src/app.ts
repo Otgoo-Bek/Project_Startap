@@ -6,6 +6,7 @@ import userRoutes from './routes/user.routes';
 import shiftRoutes from './routes/shift.routes';
 import applicationRoutes from './routes/application.routes';
 import balanceRoutes from './routes/balance.routes';
+import reviewRoutes from './routes/review.routes';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -58,5 +59,6 @@ app.use((req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+app.use('/', reviewRoutes);
 
 export default app;
