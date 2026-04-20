@@ -7,7 +7,7 @@ import shiftRoutes from './routes/shift.routes';
 import applicationRoutes from './routes/application.routes';
 import balanceRoutes from './routes/balance.routes';
 import reviewRoutes from './routes/review.routes';
-
+import documentRoutes from './routes/document.routes';
 const app = express();
 const prisma = new PrismaClient();
 
@@ -60,5 +60,6 @@ app.use((req, res) => {
   });
 });
 app.use('/', reviewRoutes);
+app.use('/', documentRoutes);
 
 export default app;
