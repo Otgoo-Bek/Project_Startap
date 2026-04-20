@@ -102,6 +102,8 @@ export const updateProfile = async (id: string, data: {
   responsibleName?: string;
   location?: string;
   yearsOnMarket?: number;
+  specialties?: string;
+  photoUrl?: string;
 }) => {
   const client = await pool.connect();
   try {
@@ -115,8 +117,10 @@ export const updateProfile = async (id: string, data: {
         "responsibleName" = COALESCE($6, "responsibleName"),
         location = COALESCE($7, location),
         "yearsOnMarket" = COALESCE($8, "yearsOnMarket"),
+        specialties = COALESCE($9, specialties),
+        "photoUrl" = COALESCE($10, "photoUrl"),
         "updatedAt" = NOW()
-      WHERE id = $9`,
+      WHERE id = $11`,
       [
         data.name || null,
         data.experience || null,
@@ -126,11 +130,11 @@ export const updateProfile = async (id: string, data: {
         data.responsibleName || null,
         data.location || null,
         data.yearsOnMarket || null,
+        data.specialties || null,
+        data.photoUrl || null,
         id
       ]
     );
-
-    // Вернуть обновлённый профиль
     const { rows } = await client.query(
       `SELECT * FROM "User" WHERE id = $1`, [id]
     );
@@ -158,7 +162,7 @@ export const rateUser = async (seekerId: string, stars: number) => {
     `[RATING] ${user.name}: ${currentScore}→${clamped} ` +
     `(оценок: ${currentCount}→${newCount}, звёзд: ${stars})`
   );
-
+updateProfile
   return prisma.user.update({
     where: { id: seekerId },
     data: {
