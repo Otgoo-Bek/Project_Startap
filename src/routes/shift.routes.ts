@@ -10,9 +10,18 @@ router.get('/shifts', getShifts);
 
 // POST /shifts — создать смену
 router.post('/shifts', createShift);
-
+router.get('/shifts/employer/:userId', async (req, res) => {
+  try {
+    const shifts = await prisma.shift.findMany({
+      where: { creatorId: req.params.userId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(shifts);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 // GET /shifts/completed/:userId — кол-во завершённых смен работодателя
-// ВАЖНО: этот роут должен быть ВЫШЕ /shifts/:id !
 router.get('/shifts/completed/:userId', async (req, res) => {
   try {
     const count = await prisma.shift.count({
