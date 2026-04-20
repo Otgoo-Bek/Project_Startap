@@ -49,7 +49,8 @@ app.use('/', userRoutes);
 app.use('/', shiftRoutes);
 app.use('/', applicationRoutes);
 app.use('/', balanceRoutes);
-
+app.use('/', documentRoutes);
+app.use('/', reviewRoutes);
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -59,7 +60,7 @@ app.use((req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-app.use('/', reviewRoutes);
-app.use('/', documentRoutes);
+
+
 
 export default app;
