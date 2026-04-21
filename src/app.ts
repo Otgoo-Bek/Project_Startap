@@ -7,7 +7,7 @@ import shiftRoutes from './routes/shift.routes';
 import applicationRoutes from './routes/application.routes';
 import balanceRoutes from './routes/balance.routes';
 import reviewRoutes from './routes/review.routes';
-import documentRoutes from './routes/document.routes';
+
 const app = express();
 const prisma = new PrismaClient();
 
@@ -49,8 +49,9 @@ app.use('/', userRoutes);
 app.use('/', shiftRoutes);
 app.use('/', applicationRoutes);
 app.use('/', balanceRoutes);
-app.use('/', documentRoutes);
-app.use('/', reviewRoutes);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -60,7 +61,5 @@ app.use((req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-
 
 export default app;
