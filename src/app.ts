@@ -34,14 +34,14 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'ERROR', message: 'DB connection failed' });
   }
 });
-
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/', userRoutes);
 app.use('/', shiftRoutes);
 app.use('/', applicationRoutes);
 app.use('/', balanceRoutes);
 app.use('/', reviewRoutes);
 app.use('/', documentRoutes);
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 app.use((req, res) => {
   res.status(404).json({
