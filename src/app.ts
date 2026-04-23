@@ -14,7 +14,7 @@ const app = express();
 const prisma = new PrismaClient();
 
 // Создать папку uploads если не существует
-const uploadsDir = path.join(__dirname, '../uploads');
+const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
