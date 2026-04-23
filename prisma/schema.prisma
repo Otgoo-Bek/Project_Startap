@@ -34,6 +34,8 @@ model User {
   reviewsGiven        Review[]      @relation("ReviewFrom")
   reviewsReceived     Review[]      @relation("ReviewTo")
   documents           Document[]
+  transactionsFrom    Transaction[] @relation("TransactionFrom")
+  transactionsTo      Transaction[] @relation("TransactionTo")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 }
@@ -50,6 +52,7 @@ model Shift {
   creator       User          @relation(fields: [creatorId], references: [id])
   creatorId     String
   applications  Application[]
+  transactions  Transaction[]
   createdAt     DateTime      @default(now())
 }
 
@@ -85,4 +88,17 @@ model Document {
   url       String
   type      String   @default("document")
   createdAt DateTime @default(now())
+}
+
+model Transaction {
+  id         String   @id @default(uuid())
+  fromUser   User?    @relation("TransactionFrom", fields: [fromUserId], references: [id])
+  fromUserId String?
+  toUser     User?    @relation("TransactionTo", fields: [toUserId], references: [id])
+  toUserId   String?
+  shift      Shift?   @relation(fields: [shiftId], references: [id])
+  shiftId    String?
+  amount     Int
+  type       String
+  createdAt  DateTime @default(now())
 }
