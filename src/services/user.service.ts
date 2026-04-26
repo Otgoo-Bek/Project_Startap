@@ -162,7 +162,6 @@ export const rateUser = async (seekerId: string, stars: number) => {
     `[RATING] ${user.name}: ${currentScore}→${clamped} ` +
     `(оценок: ${currentCount}→${newCount}, звёзд: ${stars})`
   );
-updateProfile
   return prisma.user.update({
     where: { id: seekerId },
     data: {
