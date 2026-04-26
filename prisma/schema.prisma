@@ -100,5 +100,7 @@ model Transaction {
   shiftId    String?
   amount     Int
   type       String
+  description String?
+  status     String   @default("COMPLETED")
   createdAt  DateTime @default(now())
 }
