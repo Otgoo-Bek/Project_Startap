@@ -14,17 +14,8 @@ export const createReview = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Не все поля заполнены' });
     }
 
-    // Проверить что уже не оставлял отзыв
-    const { rows: existing } = await client.query(
-      `SELECT id FROM "Review" WHERE "fromUserId" = $1 AND "toUserId" = $2 LIMIT 1`,
-      [fromUserId, toUserId]
-    );
-    if (existing.length) {
-      return res.status(409).json({ error: 'Вы уже оставляли отзыв этому пользователю' });
-    }
-
-    // Проверить что работали вместе (COMPLETED смены)
-    const { rows: check } = await client.query(
+    // Считаем сколько завершённых смен было между пользователями
+    const { rows: completedShifts } = await client.query(
       `SELECT a.id FROM "Application" a
        JOIN "Shift" s ON s.id = a."shiftId"
        WHERE a.status = 'COMPLETED'
@@ -32,15 +23,26 @@ export const createReview = async (req: Request, res: Response) => {
          (a."seekerId" = $1 AND s."creatorId" = $2)
          OR
          (a."seekerId" = $2 AND s."creatorId" = $1)
-       ) LIMIT 1`,
+       )`,
       [fromUserId, toUserId]
     );
 
-    // Для MVP — если смен нет, всё равно разрешаем (убираем строгий запрет)
-    // Раскомментируй блок ниже если хочешь включить строгую проверку:
-    // if (!check.length) {
-    //   return res.status(403).json({ error: 'Можно оставить отзыв только после совместной работы' });
-    // }
+    // Считаем сколько уже оставлено отзывов
+    const { rows: existingReviews } = await client.query(
+      `SELECT id FROM "Review" WHERE "fromUserId" = $1 AND "toUserId" = $2`,
+      [fromUserId, toUserId]
+    );
+
+    // Если отзывов уже столько же сколько смен — запрещаем
+    // Если смен нет совсем — для MVP разрешаем 1 отзыв
+    const maxReviews = completedShifts.length > 0 ? completedShifts.length : 1;
+    if (existingReviews.length >= maxReviews) {
+      return res.status(409).json({
+        error: completedShifts.length > 0
+          ? `Вы уже оставили отзыв за все ${completedShifts.length} смен`
+          : 'Вы уже оставляли отзыв этому пользователю'
+      });
+    }
 
     // Сохранить отзыв
     const { rows } = await client.query(
@@ -49,7 +51,7 @@ export const createReview = async (req: Request, res: Response) => {
       [fromUserId, toUserId, text, Number(stars)]
     );
 
-    // Пересчитать рейтинг получателя отзыва
+    // Пересчитать рейтинг получателя
     await client.query(
       `UPDATE "User" SET
         "employerRating" = (
@@ -85,6 +87,39 @@ export const getReviews = async (req: Request, res: Response) => {
       [req.params.userId]
     );
     res.json(rows);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+};
+
+export const deleteReview = async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { fromUserId } = req.body;
+
+    const { rows: review } = await client.query(
+      `SELECT * FROM "Review" WHERE id = $1`, [id]
+    );
+    if (!review.length) {
+      return res.status(404).json({ error: 'Отзыв не найден' });
+    }
+    if (fromUserId && review[0].fromUserId !== fromUserId) {
+      return res.status(403).json({ error: 'Нельзя удалить чужой отзыв' });
+    }
+    const toUserId = review[0].toUserId;
+    await client.query(`DELETE FROM "Review" WHERE id = $1`, [id]);
+    await client.query(
+      `UPDATE "User" SET
+        "employerRating" = (SELECT AVG(stars) FROM "Review" WHERE "toUserId" = $1),
+        "employerRatingCount" = (SELECT COUNT(*) FROM "Review" WHERE "toUserId" = $1),
+        "aiScore" = LEAST(100, ROUND(
+          COALESCE((SELECT AVG(stars) FROM "Review" WHERE "toUserId" = $1), 0) * 20
+        ))
+       WHERE id = $1`,
+      [toUserId]
+    );
+    res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   } finally { client.release(); }
