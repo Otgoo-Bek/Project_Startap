@@ -75,5 +75,20 @@ router.get('/applications/active/:seekerId', async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally { client.release(); }
 });
-
+router.get('/applications/completed', async (req, res) => {
+  const { seekerId, employerId } = req.query;
+  try {
+    const { rows } = await pool.query(`
+      SELECT COUNT(*) as count 
+      FROM "Application" a
+      JOIN "Shift" s ON a."shiftId" = s.id
+      WHERE a."seekerId" = $1 
+      AND s."creatorId" = $2 
+      AND a.status = 'COMPLETED'
+    `, [seekerId, employerId]);
+    res.json({ hasCompleted: Number(rows[0].count) > 0 });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
 export default router;
