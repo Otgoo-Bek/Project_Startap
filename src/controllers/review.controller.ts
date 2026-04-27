@@ -14,9 +14,10 @@ export const createReview = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Не все поля заполнены' });
     }
 
-    // Считаем сколько завершённых смен было между пользователями
+    // Получаем все завершённые смены между этими двумя пользователями
     const { rows: completedShifts } = await client.query(
-      `SELECT a.id FROM "Application" a
+      `SELECT a.id as "applicationId", s.id as "shiftId"
+       FROM "Application" a
        JOIN "Shift" s ON s.id = a."shiftId"
        WHERE a.status = 'COMPLETED'
        AND (
@@ -27,20 +28,23 @@ export const createReview = async (req: Request, res: Response) => {
       [fromUserId, toUserId]
     );
 
-    // Считаем сколько уже оставлено отзывов
+    // Проверяем что вообще работали вместе
+    if (!completedShifts.length) {
+      return res.status(403).json({
+        error: 'Отзыв можно оставить только после завершённой совместной смены'
+      });
+    }
+
+    // Считаем сколько отзывов уже оставил этот пользователь
     const { rows: existingReviews } = await client.query(
       `SELECT id FROM "Review" WHERE "fromUserId" = $1 AND "toUserId" = $2`,
       [fromUserId, toUserId]
     );
 
-    // Если отзывов уже столько же сколько смен — запрещаем
-    // Если смен нет совсем — для MVP разрешаем 1 отзыв
-    const maxReviews = completedShifts.length > 0 ? completedShifts.length : 1;
-    if (existingReviews.length >= maxReviews) {
+    // Один отзыв на одну смену — не больше чем смен
+    if (existingReviews.length >= completedShifts.length) {
       return res.status(409).json({
-        error: completedShifts.length > 0
-          ? `Вы уже оставили отзыв за все ${completedShifts.length} смен`
-          : 'Вы уже оставляли отзыв этому пользователю'
+        error: `Вы уже оставили отзыв за все ${completedShifts.length} завершённых смен`
       });
     }
 
@@ -54,12 +58,8 @@ export const createReview = async (req: Request, res: Response) => {
     // Пересчитать рейтинг получателя
     await client.query(
       `UPDATE "User" SET
-        "employerRating" = (
-          SELECT AVG(stars) FROM "Review" WHERE "toUserId" = $1
-        ),
-        "employerRatingCount" = (
-          SELECT COUNT(*) FROM "Review" WHERE "toUserId" = $1
-        ),
+        "employerRating" = (SELECT AVG(stars) FROM "Review" WHERE "toUserId" = $1),
+        "employerRatingCount" = (SELECT COUNT(*) FROM "Review" WHERE "toUserId" = $1),
         "aiScore" = LEAST(100, ROUND(
           (SELECT AVG(stars) FROM "Review" WHERE "toUserId" = $1) * 20
         ))
