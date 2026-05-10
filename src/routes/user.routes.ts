@@ -72,13 +72,23 @@ router.post('/users/auth', async (req, res) => {
 router.post('/users/phone-sync', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { phone, role, name } = req.body;
+    const { firebaseToken, phone: rawPhone, role, name, webLogin } = req.body;
 
-    if (!phone || !role)
+    let normalizedPhone = rawPhone?.replace(/[\s\-\(\)]/g, '') || '';
+
+    // Верифицируем Firebase токен (только для мобильных)
+    if (!webLogin && firebaseToken) {
+      try {
+        const admin = (await import('../firebase')).default;
+        const decoded = await admin.auth().verifyIdToken(firebaseToken);
+        normalizedPhone = decoded.phone_number || normalizedPhone;
+      } catch (firebaseErr: any) {
+        return res.status(401).json({ error: 'Неверный Firebase токен' });
+      }
+    }
+
+    if (!normalizedPhone || !role)
       return res.status(400).json({ error: 'phone и role обязательны' });
-
-    // Нормализуем: +79001234567
-    const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '');
 
     // Ищем по телефону
     const { rows } = await client.query(
