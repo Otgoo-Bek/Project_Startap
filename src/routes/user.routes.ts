@@ -124,16 +124,19 @@ router.post('/users/phone-sync', async (req, res) => {
     const uid = (role === 'B2C' ? 'b2c_' : 'b2b_') + normalizedPhone.replace(/\D/g, '');
     const userName = name?.trim() || (role === 'B2C' ? 'Соискатель' : 'Работодатель');
 
-    const { rows: created } = await client.query(
-      `INSERT INTO "User" (
-        id, uid, phone, role, name,
-        "isHot", "aiScore", "ratingCount",
-        balance, earnings, "employerRatingCount"
-      ) VALUES ($1,$2,$3,$4,$5, false,0,0,0,0,0)
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-       RETURNING *`,
-      [uid, uid, normalizedPhone, role, userName]
-    );
+   const fakeEmail = `phone_${normalizedPhone.replace(/\D/g, '')}@migrabota.app`;
+
+  const { rows: created } = await client.query(
+    `INSERT INTO "User" (
+    id, uid, phone, email, role, name,
+    "isHot", "aiScore", "ratingCount",
+    balance, earnings, "employerRatingCount"
+    ) VALUES ($1,$2,$3,$4,$5,$6, false,0,0,0,0,0)
+    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+     RETURNING *`,
+  [uid, uid, normalizedPhone, fakeEmail, role, userName]
+  ); 
+    
 
     return res.status(201).json(created[0]);
 
