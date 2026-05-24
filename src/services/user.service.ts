@@ -69,11 +69,13 @@ export const getUserById = async (id: string) => {
 };
 
 // ── Обновить профиль по uid ──────────────────────────
+
 export const updateUser = async (uid: string, data: {
   name?: string;
   phone?: string;
   experience?: string;
   address?: string;
+  balance?: number;
 }) => {
   return prisma.user.updateMany({
     where: { uid },
@@ -82,6 +84,7 @@ export const updateUser = async (uid: string, data: {
       phone: data.phone,
       experience: data.experience,
       address: data.address,
+      ...(data.balance !== undefined && { balance: data.balance }),
     }
   });
 };
