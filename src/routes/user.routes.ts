@@ -123,22 +123,30 @@ router.post('/users/phone-sync', async (req, res) => {
     // Создаём нового пользователя
     const uid = (role === 'B2C' ? 'b2c_' : 'b2b_') + normalizedPhone.replace(/\D/g, '');
     const userName = name?.trim() || (role === 'B2C' ? 'Соискатель' : 'Работодатель');
+    const fakeEmail = `phone_${normalizedPhone.replace(/\D/g, '')}@migrabota.app`;
+    const now = new Date().toISOString();
 
- const fakeEmail = `phone_${normalizedPhone.replace(/\D/g, '')}@migrabota.app`;
-const now = new Date().toISOString();
+    const { rows: created } = await client.query(
+      `INSERT INTO "User" (
+        id, uid, phone, email, role, name,
+        "isHot", "aiScore", "ratingCount",
+        balance, earnings, "employerRatingCount",
+        "createdAt", "updatedAt"
+      ) VALUES ($1,$2,$3,$4,$5,$6, false,0,0,0,0,0,$7,$7)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
+       RETURNING *`,
+      [uid, uid, normalizedPhone, fakeEmail, role, userName, now]
+    );
 
-  const { rows: created } = await client.query(
-   `INSERT INTO "User" (
-    id, uid, phone, email, role, name,
-    "isHot", "aiScore", "ratingCount",
-    balance, earnings, "employerRatingCount",
-    "createdAt", "updatedAt"
-    )  VALUES ($1,$2,$3,$4,$5,$6, false,0,0,0,0,0,$7,$7)
-   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
-   RETURNING *`,
-  [uid, uid, normalizedPhone, fakeEmail, role, userName, now]
-  ); 
+    // Приветственный пуш новому пользователю
+    try {
+      const { sendWelcomePush } = await import('../services/notification.service');
+      await sendWelcomePush(created[0].id, userName, role);
+    } catch (e) {
+      console.error('[WELCOME PUSH ERROR]', e);
+    }
 
+    return res.status(201).json(created[0]);
 
   } catch (e: any) {
     console.error('[PHONE SYNC ERROR]', e.message);

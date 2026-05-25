@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// Отправить push через Expo Push API
 const sendExpoPush = async (
   pushToken: string,
   title: string,
@@ -28,7 +27,6 @@ const sendExpoPush = async (
         priority: 'high',
       }),
     });
-    // Явно типизируем ответ
     const result = await response.json() as { data?: { status?: string } };
     console.log(`[PUSH] ✅ "${title}" → ${result?.data?.status || 'sent'}`);
   } catch (e) {
@@ -36,24 +34,117 @@ const sendExpoPush = async (
   }
 };
 
-// ── Сценарий А: при создании смены → пуш всем isHot ─
-export const sendPushToHotUsers = async (shift: any): Promise<void> => {
-  const hotUsers = await prisma.user.findMany({
-    where: { role: 'B2C', isHot: true, pushToken: { not: null } }
+// ── ИИ-подбор соискателей для смены ─────────────────
+const matchSeekers = (seekers: any[], shift: any): any[] => {
+  const shiftRole = (shift.role || '').toLowerCase();
+  const shiftDate = shift.startTime ? new Date(shift.startTime) : null;
+  const isToday = shiftDate
+    ? shiftDate.toDateString() === new Date().toDateString()
+    : false;
+
+  // Ключевые слова по специальностям
+  const roleKeywords: Record<string, string[]> = {
+    'бариста': ['бариста', 'кофе', 'кафе', 'barista'],
+    'официант': ['официант', 'сервис', 'зал', 'ресторан'],
+    'повар': ['повар', 'кухня', 'готовить', 'шеф'],
+    'грузчик': ['грузчик', 'погрузка', 'склад', 'грузы'],
+    'монтажник': ['монтажник', 'монтаж', 'установка', 'сборка'],
+    'уборщик': ['уборщик', 'уборка', 'клининг', 'чистота'],
+    'охранник': ['охранник', 'охрана', 'безопасность'],
+    'промоутер': ['промоутер', 'промо', 'реклама'],
+  };
+
+  return seekers.filter(seeker => {
+    // Базовый фильтр — есть pushToken
+    if (!seeker.pushToken) return false;
+
+    const experience = (seeker.experience || '').toLowerCase();
+    const specialties = (seeker.specialties || '').toLowerCase();
+    const seekerData = `${experience} ${specialties}`;
+
+    // Проверяем совпадение по специальности
+    let roleMatch = false;
+
+    // Прямое совпадение
+    if (seekerData.includes(shiftRole)) {
+      roleMatch = true;
+    }
+
+    // Совпадение по ключевым словам
+    if (!roleMatch) {
+      for (const [key, keywords] of Object.entries(roleKeywords)) {
+        if (shiftRole.includes(key) || keywords.some(k => shiftRole.includes(k))) {
+          if (keywords.some(k => seekerData.includes(k))) {
+            roleMatch = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Если нет опыта указан — всё равно отправляем (новички)
+    const hasNoExperience = !seeker.experience && !seeker.specialties;
+
+    // Для смен "сегодня" — приоритет горячим (isHot)
+    if (isToday && !seeker.isHot && !roleMatch && !hasNoExperience) {
+      return false;
+    }
+
+    return roleMatch || hasNoExperience || seeker.isHot;
   });
-  console.log(`[PUSH] Горящая смена → ${hotUsers.length} кандидатов`);
-  const promises = hotUsers
-    .filter(u => u.pushToken)
-    .map(u => sendExpoPush(
-      u.pushToken!,
-      `[!] Новая смена: ${shift.role} в ${shift.establishment}!`,
-      `${shift.pay}₽ · ${shift.address}`,
-      { shiftId: shift.id, type: 'new_shift' }
-    ));
+};
+
+// ── При создании смены → ИИ подбирает соискателей ───
+export const sendPushToHotUsers = async (shift: any): Promise<void> => {
+  const allSeekers = await prisma.user.findMany({
+    where: {
+      role: 'B2C',
+      pushToken: { not: null }
+    }
+  });
+
+  const matched = matchSeekers(allSeekers, shift);
+
+  console.log(`[PUSH] ИИ подобрал ${matched.length} из ${allSeekers.length} соискателей для "${shift.role}"`);
+
+  const shiftDate = shift.startTime ? new Date(shift.startTime) : null;
+  const isToday = shiftDate
+    ? shiftDate.toDateString() === new Date().toDateString()
+    : false;
+
+  const urgencyPrefix = isToday ? '🔥 СЕГОДНЯ! ' : '⚡ ';
+
+  const promises = matched.map(u => sendExpoPush(
+    u.pushToken!,
+    `${urgencyPrefix}Новая смена: ${shift.role}`,
+    `${shift.pay?.toLocaleString()}₽ · ${shift.establishment} · ${shift.address}`,
+    { shiftId: shift.id, type: 'new_shift' }
+  ));
+
   await Promise.allSettled(promises);
 };
 
-// ── Сценарий Б: при отклике → пуш работодателю ───────
+// ── При регистрации → приветственный пуш ────────────
+export const sendWelcomePush = async (
+  userId: string,
+  name: string,
+  role: string
+): Promise<void> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user?.pushToken) return;
+
+  const isB2C = role === 'B2C';
+  await sendExpoPush(
+    user.pushToken,
+    `👋 Добро пожаловать, ${name || 'в МигРабота'}!`,
+    isB2C
+      ? 'Найди подработку рядом с тобой прямо сейчас!'
+      : 'Создай первую смену и найди персонал за минуты!',
+    { type: 'welcome' }
+  );
+};
+
+// ── При отклике → пуш работодателю ──────────────────
 export const sendPushToEmployer = async (
   creatorId: string,
   message: string
@@ -71,7 +162,7 @@ export const sendPushToEmployer = async (
   );
 };
 
-// ── Пуш соискателю ────────────────────────────────────
+// ── Пуш соискателю ───────────────────────────────────
 export const sendPushToSeeker = async (
   seekerId: string,
   message: string
@@ -83,7 +174,7 @@ export const sendPushToSeeker = async (
   }
   await sendExpoPush(
     seeker.pushToken,
-    'ASAP WORK',
+    'МигРабота',
     message,
     { type: 'shift_update' }
   );
