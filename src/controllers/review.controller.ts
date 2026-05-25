@@ -29,11 +29,13 @@ export const createReview = async (req: Request, res: Response) => {
     );
 
     // Проверяем что вообще работали вместе
-    if (!completedShifts.length) {
-      return res.status(403).json({
-        error: 'Отзыв можно оставить только после завершённой совместной смены'
-      });
-    }
+   // Проверяем что вообще работали вместе
+// skipShiftCheck — для отзывов из OrderWaiting где смена уже завершена
+if (!completedShifts.length && !req.body.skipShiftCheck) {
+  return res.status(403).json({
+    error: 'Отзыв можно оставить только после завершённой совместной смены'
+  });
+} 
 
     // Считаем сколько отзывов уже оставил этот пользователь
     const { rows: existingReviews } = await client.query(
