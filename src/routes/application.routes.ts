@@ -91,4 +91,27 @@ router.get('/applications/completed', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// GET /applications/all/:seekerId — все заявки соискателя
+router.get('/applications/all/:seekerId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query(
+      `SELECT a.*,
+        json_build_object(
+          'id', s.id, 'role', s.role, 'address', s.address,
+          'pay', s.pay, 'establishment', s.establishment,
+          'creatorId', s."creatorId", 'status', s.status,
+          'startTime', s."startTime", 'endTime', s."endTime"
+        ) as shift
+       FROM "Application" a
+       JOIN "Shift" s ON s.id = a."shiftId"
+       WHERE a."seekerId" = $1
+       ORDER BY a."createdAt" DESC`,
+      [req.params.seekerId]
+    );
+    res.json(rows);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
 export default router;
