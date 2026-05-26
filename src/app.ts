@@ -9,7 +9,7 @@ import applicationRoutes from './routes/application.routes';
 import balanceRoutes from './routes/balance.routes';
 import reviewRoutes from './routes/review.routes';
 import documentRoutes from './routes/document.routes';
-
+import adminRoutes from './routes/admin.routes';
 const app = express();
 const prisma = new PrismaClient();
 
@@ -49,7 +49,7 @@ app.use('/', applicationRoutes);
 app.use('/', balanceRoutes);
 app.use('/', reviewRoutes);
 app.use('/', documentRoutes);
-
+app.use('/', adminRoutes);
 app.use((req, res) => {
   res.status(404).json({
     error: 'Route not found',
