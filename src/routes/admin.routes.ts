@@ -486,8 +486,11 @@ async function loadStats() {
   }
 }
 
-loadStats();
-setInterval(loadStats, 30000);
+document.addEventListener('DOMContentLoaded', () => {
+  loadStats();
+  setInterval(loadStats, 30000);
+});
+
 </script>
 </body>
 </html>`);
