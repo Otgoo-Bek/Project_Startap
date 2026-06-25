@@ -72,9 +72,10 @@ router.post('/users/auth', async (req, res) => {
 router.post('/users/phone-sync', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { firebaseToken, phone: rawPhone, role, name, webLogin } = req.body;
+    const { firebaseToken, phone: rawPhone, phoneNumber, role, name, webLogin } = req.body;
+    const effectivePhone = rawPhone || phoneNumber;
 
-    let normalizedPhone = rawPhone?.replace(/[\s\-\(\)]/g, '') || '';
+    let normalizedPhone = (effectivePhone || '')?.replace(/[\s\-\(\)]/g, '') || '';
 
     // Верифицируем Firebase токен (только для мобильных)
     if (!webLogin && firebaseToken) {
@@ -87,7 +88,7 @@ router.post('/users/phone-sync', async (req, res) => {
       }
     }
 
-    if (!normalizedPhone || !role)
+    if (!normalizedPhone)
       return res.status(400).json({ error: 'phone и role обязательны' });
 
     // Ищем по телефону
